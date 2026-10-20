@@ -28,6 +28,7 @@ while true; do
     echo "Select the platform:"
     echo "1) GitHub"
     echo "2) GitLab"
+    echo "3) Bitbucket"
     read -p "Enter your choice: " platform_choice
 
     case $platform_choice in
@@ -39,13 +40,17 @@ while true; do
             platform="gitlab"
             break
             ;;
+        3)
+            platform="bitbucket"
+            break
+            ;;
         *)
-            echo "Invalid choice. Please select 1 for GitHub or 2 for GitLab."
+            echo "Invalid choice. Please select 1 for GitHub, 2 for GitLab or 3 for Bitbucket."
             ;;
     esac
 done
 
-read -p "Enter the organization name: " org_name
+read -p "Enter the organization name (Bitbucket: workspace slug): " org_name
 
 if [[ -z "$org_name" ]]; then
     echo "Cannot continue without organization name!"

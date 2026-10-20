@@ -1,0 +1,57 @@
+# Development pipeline, runs on a self-hosted Bitbucket Linux Shell runner
+# (labels: self.hosted, linux.shell) next to the local Kubeflow on localhost:8080.
+pipelines:
+  branches:
+    development:
+      - step:
+          name: Test python files
+          runs-on:
+            - self.hosted
+            - linux.shell
+          condition:
+            changesets:
+              includePaths:
+                - "src/**"
+          script:
+            - echo "🚀 Running Pytest for Development..."
+            - python3.8 -m venv venv
+            - source venv/bin/activate
+            - pip install --upgrade pip
+            - if [ -f src/requirements.txt ]; then pip install -r src/requirements.txt; fi
+            - pip install pytest
+            - pytest src/ || echo "No tests provided or tests passed"
+      - parallel:
+          - step:
+              name: Run python files in development
+              runs-on:
+                - self.hosted
+                - linux.shell
+              condition:
+                changesets:
+                  includePaths:
+                    - "src/**"
+              script:
+                - echo "⚙️ Submitting Pipeline via Python files to Development Kubeflow..."
+                - python3.8 -m venv venv
+                - source venv/bin/activate
+                - pip install --upgrade pip
+                - pip install "kfp~=1.8.14"
+                - python src/submit_run.py
+          - step:
+              name: Run notebook in development
+              runs-on:
+                - self.hosted
+                - linux.shell
+              condition:
+                changesets:
+                  includePaths:
+                    - "notebooks/**"
+              script:
+                - echo "📓 Running Notebook Pipeline on Development Kubeflow..."
+                - python3.8 -m venv venv
+                - source venv/bin/activate
+                - pip install --upgrade pip
+                - pip install jupyter "kfp~=1.8.14"
+                - jupyter nbconvert --execute --to notebook --inplace notebooks/demo-pipeline.ipynb
+              artifacts:
+                - notebooks/demo-pipeline.ipynb

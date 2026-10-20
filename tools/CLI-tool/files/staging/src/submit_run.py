@@ -13,15 +13,19 @@ def submit_pipeline():
 
     if os.environ.get("GITHUB_ACTIONS") == "true":
         ci_platform = "github-actions"
+    elif os.environ.get("BITBUCKET_BUILD_NUMBER"):  # checked before CI: Bitbucket sets CI=true too
+        ci_platform = "bitbucket-pipelines"
     elif os.environ.get("CI") == "true":
         ci_platform = "gitlab-ci"
     else:
         ci_platform = "local"
 
-    # Branch name: GitLab uses CI_COMMIT_BRANCH, GitHub uses GITHUB_REF_NAME
+    # Branch name: GitLab uses CI_COMMIT_BRANCH, GitHub uses GITHUB_REF_NAME,
+    # Bitbucket uses BITBUCKET_BRANCH
     branch = (
         os.environ.get("CI_COMMIT_BRANCH")       # GitLab
         or os.environ.get("GITHUB_REF_NAME")      # GitHub
+        or os.environ.get("BITBUCKET_BRANCH")     # Bitbucket
         or "unknown-branch"
     )
     

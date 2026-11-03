@@ -73,11 +73,12 @@ while true; do
     echo "Select an option:"
     echo "Which script(s) would you like to run?"
     echo "1) Configure Github (GH) for the tool (configure_gh.py)"
-    echo "2) Create configuration repo for one or more ML project working repos (create_config_repo.py)"
+    echo "2) Create only a configuration repo (create_config_repo.py)"
     echo "3) Create one ML project working repo based on a configuration repo (create_working_repo.py)"
-    echo "4) Both (step 3 is based on config repo created in step 2) 🟢 RECOMMENDED 🟢"
+    echo "4) Both (step 3 is based on config repo created in step 2) [default]"
     echo "5) Exit"
-    read -p "Enter your choice: " choice
+    read -p "Enter your choice [4]: " choice
+    choice=${choice:-4}
 
     case $choice in
         1)

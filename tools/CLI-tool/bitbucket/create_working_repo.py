@@ -38,14 +38,23 @@ def fork_repo(client: BitbucketClient, repo_name: str):
         sys.exit(1)
 
     working_name = get_working_repo_name(repo_name)
-    while client.get_repo(slugify(working_name)):
-        typer.echo(f"The repository name {working_name} is already present in the workspace! Please provide a different one.")
-        working_name = get_working_repo_name(repo_name)
     working_slug = slugify(working_name)
+    existing_repo = client.get_repo(working_slug)
+    while existing_repo:
+        if typer.confirm(
+            f"Repository '{working_name}' already exists. Use it as the working repository?",
+            default=False,
+        ):
+            break
+        typer.echo("Please provide a different repository name.")
+        working_name = get_working_repo_name(repo_name)
+        working_slug = slugify(working_name)
+        existing_repo = client.get_repo(working_slug)
 
     try:
-        typer.echo(f"Forking repository {repo_name} to {working_name}...")
-        client.fork_repo(source_slug, working_name)
+        if not existing_repo:
+            typer.echo(f"Forking repository {repo_name} to {working_name}...")
+            client.fork_repo(source_slug, working_name)
 
         # Bitbucket forks asynchronously: wait until the fork exists and has its branches.
         for _ in range(60):

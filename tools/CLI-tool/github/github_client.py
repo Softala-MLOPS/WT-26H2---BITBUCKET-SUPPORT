@@ -1,3 +1,4 @@
+import os
 import subprocess
 
 import typer
@@ -8,14 +9,24 @@ class GitHubClient:
         pass
 
     def create_repo(self, repo_name, org_name):
-        """Create a new GitHub repository."""
+        """Create and clone a new repository, or clone the existing repository."""
+        repository = f"{org_name}/{repo_name}"
+        if self.get_repo(repo_name, org_name):
+            typer.echo("Repository already exists.")
+            if not os.path.isdir(repo_name):
+                subprocess.run(
+                    ["gh", "repo", "clone", repository, repo_name],
+                    check=True,
+                )
+            return
+
         try:
             subprocess.run(
                 [
                     "gh",
                     "repo",
                     "create",
-                    f"{org_name}/{repo_name}",
+                    repository,
                     "--public",
                     "--description",
                     "Upstream repository",
@@ -27,11 +38,8 @@ class GitHubClient:
             )
             typer.echo(f"Repository '{repo_name}' created successfully.")
         except subprocess.CalledProcessError as e:
-            if "already exists" in e.stderr:
-                typer.echo("Repository already exists.")
-            else:
-                typer.echo(f"Error creating repository: {e.stderr}")
-                raise
+            typer.echo(f"Error creating repository: {e.stderr}")
+            raise
 
     def get_repo(self, repo_name, org_name):
         """Get a repository by its name and organization."""

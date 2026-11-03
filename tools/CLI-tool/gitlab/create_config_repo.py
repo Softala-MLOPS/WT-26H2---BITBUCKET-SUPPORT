@@ -80,7 +80,7 @@ def create_repo(client: GitLabClient, repo_name, org_name):
         typer.echo(f"GitLab returned an unexpected project payload: {project}")
         sys.exit(1)
 
-    subprocess.run(["glab", "repo", "clone", project["path_with_namespace"]], check=True)
+    subprocess.run(["git", "clone", clone_url], check=True)
 
     os.chdir(repo_name)
     subprocess.run(["git", "remote", "set-url", "origin", clone_url], check=True)

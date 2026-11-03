@@ -479,7 +479,7 @@ oss-mlops-platform/tools/CLI-tool/create_gitrepo_devops_for_ml_work.sh
 2. Enter the organisation/group name (you can find the exact group name inside that GitLab Group URL)
 3. Enter the name for configuration repository 
    - Please use a naming convention for config repo and working repos (f.ex. `confJames` and `workJames`) 
-4. Create both configuration and working repositories (option 4) 
+4. Create both configuration and working repositories (press Enter for the default option 4; option 2 creates only the configuration repository)
 5. Interactively create config (option 1)
 6. Use default Kubeflow endpoint
 7. Use default Kubeflow username

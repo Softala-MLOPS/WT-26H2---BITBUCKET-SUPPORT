@@ -10,6 +10,7 @@ import os
 import re
 import stat
 import sys
+import time
 from urllib.parse import quote
 
 import requests
@@ -21,7 +22,9 @@ CONFIG_FILE = os.path.expanduser("~/.bitbucket-cli-config.json")
 GIT_USER = {
     "api_token": "x-bitbucket-api-token-auth",
     "access_token": "x-token-auth",
+    "oauth": "x-token-auth",
 }
+OAUTH_TOKEN_URL = "https://bitbucket.org/site/oauth2/access_token"
 
 
 class BitbucketError(RuntimeError):
@@ -49,13 +52,27 @@ def save_config(config: dict) -> None:
 
 
 class BitbucketClient:
-    def __init__(self, workspace: str, auth_type: str, token: str, email: str = ""):
+    def __init__(
+        self,
+        workspace: str,
+        auth_type: str,
+        token: str,
+        email: str = "",
+        client_id: str = "",
+        client_secret: str = "",
+        refresh_token: str = "",
+        expires_at: float = 0,
+    ):
         if auth_type not in GIT_USER:
             raise ValueError(f"Unknown auth_type: {auth_type}")
         self.workspace = workspace
         self.auth_type = auth_type
         self.token = token
         self.email = email
+        self.client_id = client_id
+        self.client_secret = client_secret
+        self.refresh_token = refresh_token
+        self.expires_at = float(expires_at)
         self.session = requests.Session()
         if auth_type == "api_token":
             self.session.auth = (email, token)
@@ -65,15 +82,60 @@ class BitbucketClient:
     @classmethod
     def from_config(cls, workspace: str | None = None) -> "BitbucketClient":
         cfg = load_config()
+        if cfg.get("auth_type") == "oauth":
+            return cls.from_auth_config({**cfg, "workspace": workspace or cfg["workspace"]})
         token = os.environ.get("BITBUCKET_API_TOKEN") or cfg.get("token", "")
         if not token:
             print("No Bitbucket token found. Run 'configure_bitbucket.py' or set BITBUCKET_API_TOKEN.")
             sys.exit(1)
-        return cls(workspace or cfg["workspace"], cfg["auth_type"], token, cfg.get("email", ""))
+        cfg = {**cfg, "workspace": workspace or cfg["workspace"], "token": token}
+        return cls.from_auth_config(cfg)
+
+    @classmethod
+    def from_auth_config(cls, config: dict) -> "BitbucketClient":
+        return cls(
+            config["workspace"],
+            config["auth_type"],
+            config.get("token", ""),
+            config.get("email", ""),
+            config.get("client_id", ""),
+            config.get("client_secret", ""),
+            config.get("refresh_token", ""),
+            config.get("expires_at", 0),
+        )
+
+    def _refresh_oauth_token_if_needed(self) -> None:
+        if self.auth_type != "oauth" or self.expires_at > time.time() + 60:
+            return
+        response = self.session.post(
+            OAUTH_TOKEN_URL,
+            auth=(self.client_id, self.client_secret),
+            data={"grant_type": "refresh_token", "refresh_token": self.refresh_token},
+            timeout=60,
+        )
+        if response.status_code != 200:
+            raise BitbucketError(f"OAuth token refresh failed ({response.status_code}): {response.text[:500]}")
+        token_data = response.json()
+        self.token = token_data["access_token"]
+        self.refresh_token = token_data["refresh_token"]
+        self.expires_at = time.time() + int(token_data["expires_in"])
+        self.session.headers["Authorization"] = f"Bearer {self.token}"
+        save_config(
+            {
+                "workspace": self.workspace,
+                "auth_type": self.auth_type,
+                "client_id": self.client_id,
+                "client_secret": self.client_secret,
+                "token": self.token,
+                "refresh_token": self.refresh_token,
+                "expires_at": self.expires_at,
+            }
+        )
 
     # ---------- git credentials ----------
     def export_git_auth(self) -> None:
         """Make every child `git` process authenticate, without writing the token to disk."""
+        self._refresh_oauth_token_if_needed()
         raw = f"{GIT_USER[self.auth_type]}:{self.token}".encode()
         header = "Authorization: Basic " + base64.b64encode(raw).decode()
         os.environ["GIT_CONFIG_COUNT"] = "1"
@@ -86,6 +148,9 @@ class BitbucketClient:
 
     # ---------- HTTP ----------
     def _request(self, method, path, ok=(200, 201, 202, 204), **kwargs):
+        self._refresh_oauth_token_if_needed()
+        if self.auth_type != "api_token":
+            self.session.headers["Authorization"] = f"Bearer {self.token}"
         url = path if path.startswith("http") else f"{API_BASE}/{path.lstrip('/')}"
         resp = self.session.request(method, url, timeout=60, **kwargs)
         if resp.status_code not in ok:
@@ -104,7 +169,13 @@ class BitbucketClient:
         return self._request("GET", f"workspaces/{self.workspace}").json()
 
     def get_repo(self, slug: str):
-        resp = self._request("GET", f"repositories/{self.workspace}/{slug}", ok=(200, 404))
+        resp = self._request("GET", f"repositories/{self.workspace}/{slug}", ok=(200, 403, 404))
+        if resp.status_code == 403:
+            if "Repository currently not available" in resp.text:
+                return None
+            raise BitbucketError(
+                f"GET repository {self.workspace}/{slug} -> {resp.status_code}: {resp.text[:500]}"
+            )
         return resp.json() if resp.status_code == 200 else None
 
     def create_repo(self, name: str, description: str = ""):

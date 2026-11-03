@@ -70,9 +70,34 @@ def create_repo(client: BitbucketClient, repo_name: str):
     else:
         typer.echo("Repository already exists.")
 
-    subprocess.run(["git", "clone", client.clone_url(repo["slug"])], check=True)
+    if os.path.isdir(repo["slug"]):
+        result = subprocess.run(
+            ["git", "-C", repo["slug"], "rev-parse", "--is-inside-work-tree"],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            raise BitbucketError(
+                f"Local path '{repo['slug']}' exists but is not a Git repository; "
+                "move it aside before retrying."
+            )
+    else:
+        subprocess.run(["git", "clone", client.clone_url(repo["slug"])], check=True)
     os.chdir(repo["slug"])
     return repo
+
+
+def commit_if_staged(message: str, branch: str | None = None) -> None:
+    """Commit staged changes only when there are changes, and push the branch."""
+    result = subprocess.run(["git", "diff", "--cached", "--quiet"], check=False)
+    if result.returncode == 1:
+        subprocess.run(["git", "commit", "-m", message], check=True)
+    elif result.returncode != 0:
+        raise subprocess.CalledProcessError(result.returncode, result.args)
+    if branch:
+        subprocess.run(["git", "push", "origin", branch], check=True)
+    else:
+        subprocess.run(["git", "push"], check=True)
 
 
 def push_repo():
@@ -86,8 +111,7 @@ def push_repo():
     with open("README.md", "w") as f:
         f.write("Readme\n")
     subprocess.run(["git", "add", "."], check=True)
-    subprocess.run(["git", "commit", "-m", "Initial commit"], check=True)
-    subprocess.run(["git", "push", "origin", main_branch], check=True)
+    commit_if_staged("Initial commit", main_branch)
 
 
 def create_branches():
@@ -116,8 +140,7 @@ def copy_files():
                 os.remove(leftover)
 
         subprocess.run(["git", "add", "."], check=True)
-        subprocess.run(["git", "commit", "-m", f"Add {branch} files"], check=True)
-        subprocess.run(["git", "push"], check=True)
+        commit_if_staged(f"Add {branch} files")
 
 
 def set_default_branch(client: BitbucketClient, slug: str):

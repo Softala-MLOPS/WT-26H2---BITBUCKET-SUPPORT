@@ -55,8 +55,20 @@ def push_repo():
     print("Current branch:", main_branch)
     subprocess.run(f"echo Readme > README.md", shell=True)
     subprocess.run(["git", "add", "."], check=True)
-    subprocess.run(["git", "commit", "-m", '"Initial commit"'], check=True)
-    subprocess.run(["git", "push", "origin", main_branch], check=True)
+    commit_and_push("Initial commit", main_branch)
+
+
+def commit_and_push(message, branch=None):
+    """Commit staged changes when present, then push the current branch."""
+    has_changes = subprocess.run(["git", "diff", "--cached", "--quiet"], check=False)
+    if has_changes.returncode == 1:
+        subprocess.run(["git", "commit", "-m", message], check=True)
+    elif has_changes.returncode != 0:
+        raise subprocess.CalledProcessError(has_changes.returncode, has_changes.args)
+    if branch:
+        subprocess.run(["git", "push", "origin", branch], check=True)
+    else:
+        subprocess.run(["git", "push"], check=True)
 
 
 def create_branches(branches_to_create=None):
@@ -97,8 +109,7 @@ def copy_files():
         print("🧹 Removed redundant .gitlab-ci.yml file on the development branch.")
 
     subprocess.run(["git", "add", "."], check=True)
-    subprocess.run(["git", "commit", "-m", "Add branch specific files"], check=True)
-    subprocess.run(["git", "push"], check=True)
+    commit_and_push("Add branch specific files")
 
     # --- PRODUCTION BRANCH ---
     subprocess.run(["git", "checkout", "production"], check=True)
@@ -111,8 +122,7 @@ def copy_files():
         print("🧹 Removed redundant .gitlab-ci.yml file on the production branch.")
 
     subprocess.run(["git", "add", "."], check=True)
-    subprocess.run(["git", "commit", "-m", "Add production files"], check=True)
-    subprocess.run(["git", "push"], check=True)
+    commit_and_push("Add production files")
 
     # --- STAGING BRANCH ---
     subprocess.run(["git", "checkout", "staging"], check=True)
@@ -125,8 +135,7 @@ def copy_files():
         print("🧹 Removed redundant .gitlab-ci.yml file on the staging branch.")
 
     subprocess.run(["git", "add", "."], check=True)
-    subprocess.run(["git", "commit", "-m", "Add staging files"], check=True)
-    subprocess.run(["git", "push"], check=True)
+    commit_and_push("Add staging files")
 
 
 def set_default_branch(client: GitHubClient, repo_name, org_name):

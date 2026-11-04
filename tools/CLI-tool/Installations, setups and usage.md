@@ -461,9 +461,9 @@ A bit of notebook troubleshooting. Depending on the environment you are running 
 
 ### How it works
 
-The tool supports both **GitHub** and **GitLab** as CI/CD platforms. At the start of the tool, you will be asked to select your preferred platform. The tool then creates the configuration repository locally and pushes it to the selected platform. When creating the configuration repository the tool also asks for environmental variables which are set up as secrets. The working repository is then created from the local configuration repository.
+The tool supports **GitHub**, **GitLab**, and **Bitbucket** as CI/CD platforms. At the start of the tool, you will be asked to select your preferred platform. The tool then creates the configuration repository locally and pushes it to the selected platform. When creating the configuration repository the tool also asks for environment variables, which are set up as platform secrets or variables. The working repository is then created from the local configuration repository.
 
-> **Note:** You need an organization (GitHub) or a group (GitLab) where you have permissions to create and modify repositories and add secrets (Owner role for example). If you don't have the configuration repository created by the tool locally, you need to clone it to the local folder where you are trying to run the tool from.
+> **Note:** You need an organization (GitHub), a group (GitLab), or a workspace (Bitbucket) where you have permissions to create and modify repositories and add secrets/variables. If you don't have the configuration repository created by the tool locally, you need to clone it to the local folder where you are trying to run the tool from.
 
 ### Run the tool on the terminal
 
@@ -475,8 +475,8 @@ The tool supports both **GitHub** and **GitLab** as CI/CD platforms. At the star
 oss-mlops-platform/tools/CLI-tool/create_gitrepo_devops_for_ml_work.sh
 ``` 
 
-1. **Select your platform** — choose `1` for GitHub or `2` for GitLab
-2. Enter the organisation/group name (you can find the exact group name inside that GitLab Group URL)
+1. **Select your platform** — choose `1` for GitHub, `2` for GitLab, or `3` for Bitbucket
+2. Enter the organization, group, or workspace slug. For GitLab, find the exact group name in the group URL; for Bitbucket, use the workspace slug.
 3. Enter the name for configuration repository 
    - Please use a naming convention for config repo and working repos (f.ex. `confJames` and `workJames`) 
 4. Create both configuration and working repositories (press Enter for the default option 4; option 2 creates only the configuration repository)
@@ -487,7 +487,7 @@ oss-mlops-platform/tools/CLI-tool/create_gitrepo_devops_for_ml_work.sh
 9. You can leave remote private key empty 
 10. You don't have to specify remote cluster IP
 11. You can leave remote cluster username empty 
-12. GitHub/GitLab asks for pasting secrets, you can skip these with `enter` if you were leaving previous steps empty 
+12. The platform may ask for variables/secrets; you can leave optional values empty if you are not using them.
 13. Enter the name for working repository
 
 ### Configuration File
@@ -507,7 +507,7 @@ REMOTE_CLUSTER_SSH_IP: "192.168.1.1"
 REMOTE_CLUSTER_SSH_USERNAME: "user"
 ```
 
-The scripts sets the secrets on the organization/group level. You can set repository-level secrets that take precedent over organization-level ones if needed.
+The scripts set variables at organization level (GitHub), group level (GitLab), or workspace level (Bitbucket). On GitHub and GitLab, repository-level secrets/variables can take precedence over organization/group-level values.
 If a non-exact path for the SSH key file is passed, the script will search for the file containing the SSH key across the entire user home directory. This can be very slow on a populated drive (e.g. running the install script on bare metal Linux or MacOS).
 
 ******
@@ -545,8 +545,8 @@ To run the `.gitlab-ci.yml` pipelines locally to interact with your local Kubefl
 
 #### 1. Install Python 3.8 (required before runner setup)
 
-> **Why is this needed for GitLab but not GitHub?**  
-> GitHub Actions uses `actions/setup-python` which downloads a standalone Python 3.8 environment that is completely independent from the OS — it bypasses Ubuntu's package restrictions entirely. GitLab Runner (Shell executor) simply uses the system Python directly, and Ubuntu 24 ships with Python 3.12 by default. Since `kfp~=1.8.x` requires Python 3.8, you must install it manually first.
+> **Why is this needed for GitLab and the Bitbucket development runner, but not hosted runners?**
+> GitHub Actions and Bitbucket cloud steps use a separately provisioned Python environment/container. GitLab Runner and the Bitbucket development runner use the host's system Python; Ubuntu 24 ships with Python 3.12 by default. Since the generated pipelines use `kfp~=1.8.x`, Python 3.8 is required on those self-hosted runner machines.
 
 Run the following commands:
 
@@ -608,6 +608,26 @@ gitlab-runner run
 
 ---
 
+### Option C: For Bitbucket (Bitbucket Pipelines)
+
+The generated Bitbucket pipeline uses a **self-hosted Linux Shell runner** for the `development` branch. The runner executes jobs on your Ubuntu/WSL machine; for a pipeline run to submit to local Kubeflow, that platform must already be running and reachable from the runner (for example, through the required `localhost:8080` port-forward). The `staging` and `production` branches use Bitbucket cloud runners and connect to a remote Kubeflow server through SSH.
+
+1. In Bitbucket, open **Workspace settings → Pipelines → Workspace runners → Add runner**.
+2. Choose **Linux Shell** and keep the labels `self.hosted` and `linux.shell`.
+3. Download the runner archive. From the root directory of your cloned `oss-mlops-platform` repository, run the setup script and provide the archive path when prompted:
+   ```bash
+   bash tools/CLI-tool/bitbucket/install_local_runner.sh
+   ```
+   The script extracts the runner under `~/atlassian-bitbucket-pipelines-runner`. It checks for Python 3.8, which the generated `development` pipeline uses; install it first if it is missing.
+4. Follow the runner wizard's instructions to start the runner from its extracted directory. Do not run it with `sudo`. Leave the runner process running while you want it to accept jobs; Bitbucket should show it as **ONLINE**.
+5. Push a change to the `development` branch to run a pipeline on this machine. The runner is specific to Bitbucket and does not require installing a GitLab Runner.
+
+If you are only testing the CLI tool's login or repository creation, you do not need to install or start a runner. The runner and Kubeflow are needed when you want to run the generated `development` pipeline.
+
+The CLI tool creates configuration variables at workspace level. For remote `staging`/`production` pipelines, the required SSH variables are `REMOTE_CLUSTER_SSH_IP`, `REMOTE_CLUSTER_SSH_USERNAME`, and the secured, base64-encoded `REMOTE_CLUSTER_SSH_PRIVATE_KEY_B64`. The CLI tool sets these when given a private-key file path.
+
+---
+
 **Post setup**
 
 ![Tooling diagram](../resources/diagrams/toolingDiagram.png)
@@ -630,7 +650,7 @@ To test the source code-based pipelines:
 > If the change is made on the development branch, it will trigger a run on the local installation  
 > If the change is on the staging or production branch, it will trigger a run on the full installation
 
-If everything is in order then by pushing to your working repository, the runner on your computer will start the run on your local computer's Kubeflow setup.
+If everything is in order, pushing a commit starts the pipeline configured for that platform and branch. For Bitbucket, `development` uses the self-hosted runner; `staging` and `production` use Bitbucket cloud runners.
 
 ### Verifying the run and debugging
 
@@ -639,6 +659,7 @@ If everything is in order then by pushing to your working repository, the runner
    - **GitHub Actions:** Open the working repository and click on the `Actions` tab. Find the latest run and check if it has started successfully. If the run failed, open it to check the logs and debug.
 
    - **GitLab CI/CD:** Open the working repository and click on `Build > Pipelines` from the left sidebar. Find the latest pipeline and check its status. If it failed, click into the job to view logs and debug.
+   - **Bitbucket Pipelines:** Open the repository's **Pipelines** page and inspect the latest run and its step logs.
 
    ![GitHub Actions tab](../resources/screenshots/GitHubActionSuccess.png)
 
@@ -652,8 +673,9 @@ If everything is in order then by pushing to your working repository, the runner
 3. **If the run hasn't started:**
     - Verify that the commit was pushed to the correct branch
     - Ensure the CI/CD workflow is configured correctly
-    - Check the logs in GitHub Actions / GitLab CI UI and Kubeflow UI for error messages
+    - Check the logs in the GitHub Actions / GitLab CI / Bitbucket Pipelines UI and Kubeflow UI for error messages
     - **GitLab only:** Make sure the `gitlab-runner run` process is still running in your terminal
+    - **Bitbucket development only:** Make sure the self-hosted runner process is running and shows as **ONLINE** in Workspace settings → Pipelines → Workspace runners
 
 ### Possible problems
 

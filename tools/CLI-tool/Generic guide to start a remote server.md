@@ -40,3 +40,4 @@ This is just a generic setup guide or checklist to ensure that you can have the 
       | `REMOTE_CLUSTER_SSH_PRIVATE_KEY` | Full contents of your `.pem` / `.cer` key file |
 
     - **GitLab**: Go to your repository → **Settings → CI/CD → Variables** → add the same variables. Set `REMOTE_CLUSTER_SSH_PRIVATE_KEY` as type **File** (GitLab writes the key to a temporary file and passes the path to the pipeline).
+    - **Bitbucket**: Go to **Workspace settings → Pipelines → Workspace variables** and add `REMOTE_CLUSTER_SSH_IP` (your floating IP), `REMOTE_CLUSTER_SSH_USERNAME` (your VM username), and `REMOTE_CLUSTER_SSH_PRIVATE_KEY_B64` (the private key encoded as one-line base64). Mark the private-key variable as secured. To encode the key, run `base64 < your_key.pem | tr -d '\n'` and copy the output. The CLI tool can create these workspace variables for you when you provide the private-key file path.

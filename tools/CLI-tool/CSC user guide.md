@@ -124,4 +124,17 @@ You will need:
 
    > Make sure **Protect variable** is unchecked if you want the variable available on non-protected branches (e.g. `staging`).
 
+### c) Bitbucket Workspace Variables
+
+1. In Bitbucket, open **Workspace settings → Pipelines → Workspace variables**.
+2. Add the following variables. Mark the private-key variable as secured:
+
+   | Variable Name | Value |
+   |---|---|
+   | `REMOTE_CLUSTER_SSH_IP` | Your VM's Floating IP |
+   | `REMOTE_CLUSTER_SSH_USERNAME` | `ubuntu` |
+   | `REMOTE_CLUSTER_SSH_PRIVATE_KEY_B64` | The private key encoded as one-line base64 |
+
+   Encode the key with `base64 < your_key_name.pem | tr -d '\n'` and copy the output. The Bitbucket pipeline decodes it before opening the SSH tunnel. Alternatively, the CLI tool creates this variable when you provide the private-key file path.
+
 Once secrets are configured, any push to the `staging` or `production` branch will trigger the CI/CD pipeline, which SSHs into your CSC VM and submits the Kubeflow pipeline automatically.

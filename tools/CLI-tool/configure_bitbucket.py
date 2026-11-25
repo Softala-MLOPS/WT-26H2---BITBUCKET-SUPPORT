@@ -46,6 +46,7 @@ def main():
     client = BitbucketClient.from_auth_config(config)
     try:
         client.check_workspace()
+        client.check_git_access()
     except BitbucketError as e:
         typer.echo(f"Authentication failed: {e}")
         raise typer.Exit(1) from e
@@ -61,8 +62,10 @@ def reuse_saved_auth(workspace: str) -> bool:
     client = BitbucketClient.from_config(workspace)
     try:
         client.check_workspace()
+        if not client.check_git_access():
+            typer.echo("No existing repository found; Git access will be checked when a repository is created.")
     except BitbucketError as error:
-        typer.echo(f"Saved Bitbucket authentication could not be reused: {error}")
+        typer.echo(f"Saved Bitbucket authentication cannot be reused: {error}")
         return False
 
     typer.echo(f"Already authenticated to Bitbucket workspace '{workspace}'.")

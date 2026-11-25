@@ -9,6 +9,7 @@ import json
 import os
 import re
 import stat
+import subprocess
 import sys
 import time
 from urllib.parse import quote
@@ -167,6 +168,28 @@ class BitbucketClient:
     # ---------- workspace / repositories ----------
     def check_workspace(self) -> dict:
         return self._request("GET", f"workspaces/{self.workspace}").json()
+
+    def check_git_access(self, repo_slug: str | None = None) -> bool:
+        """Check Git read access using an existing repository, if one is available."""
+        if repo_slug is None:
+            repo = next(self._paginate(f"repositories/{self.workspace}?pagelen=1"), None)
+            if repo is None:
+                return False
+            repo_slug = repo["slug"]
+
+        self.export_git_auth()
+        result = subprocess.run(
+            ["git", "ls-remote", "--heads", self.clone_url(repo_slug)],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout).strip()
+            raise BitbucketError(
+                f"Git read access check failed for {self.workspace}/{repo_slug}: "
+                f"{detail or f'git exited with status {result.returncode}'}"
+            )
+        return True
 
     def get_repo(self, slug: str):
         resp = self._request("GET", f"repositories/{self.workspace}/{slug}", ok=(200, 403, 404))

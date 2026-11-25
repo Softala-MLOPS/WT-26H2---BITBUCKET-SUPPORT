@@ -70,6 +70,8 @@ def create_repo(client: BitbucketClient, repo_name: str):
     else:
         typer.echo("Repository already exists.")
 
+    client.check_git_access(repo["slug"])
+
     if os.path.isdir(repo["slug"]):
         result = subprocess.run(
             ["git", "-C", repo["slug"], "rev-parse", "--is-inside-work-tree"],
